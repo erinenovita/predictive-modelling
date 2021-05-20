@@ -1,7 +1,6 @@
 ---
-title: "AIP_Group_42_Compiled_Code"
-author: "Group 42"
-date: "09/12/2020"
+title: "Customer transaction prediction"
+author: ""
 output:
 html_document: default
 pdf_document: default
@@ -57,6 +56,9 @@ original_number <- nrow(Lesser_data)
 Lesser_data <- unique(Lesser_data)
 print(original_number - nrow(unique(Lesser_data)))
 ```
+While removing missing values, there is also a possibility that we may remove important information about the minority class. For future models, one can consider replacing missing values with the mean. 
+
+Ultimately we should also keep in mind of duplicates records and delete them from the analysis.
 
 Saving the cleaned dataset in a new file
 ```{r}
@@ -143,7 +145,7 @@ We try various models namely: Logistic Regression, Decision trees, Random forest
 We use the 'glm()' function in order to build the logistic regression model. 
 Since our data set is imbalanced, we also run the function on sampled data('ovun.sample()' function used) in order to minimize the bias LR generally has towards the majority class.
 
-We try over,under and both sampling for values of p=0.1 to p=0.5 in the 'ovun,sample()' function. And also try various combinations of p values (class probability) in the 'ifelse()' function to find the best model.
+We try over, under and both sampling for values of p=0.1 to p=0.5 in the 'ovun,sample()' function. And also try various combinations of p values (class probability) in the 'ifelse()' function to find the best model.
 
 Further on comparing the confusion matrix of the train and test data, we can say that the model does not over fit, as the accuracy is similar in both cases.
 
