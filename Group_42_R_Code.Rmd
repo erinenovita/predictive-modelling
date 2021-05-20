@@ -1,0 +1,336 @@
+---
+title: "AIP_Group_42_Compiled_Code"
+author: "Group 42"
+date: "09/12/2020"
+output:
+html_document: default
+pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+Importing the Data sets
+```{r setup, include=FALSE}
+Full_data <- read.csv("datafile_full.csv")
+Lesser_data <- read.csv("datafile_small.csv")
+```
+
+## Data understanding and preparation 
+
+```{r}
+str(Full_data)
+summary(Full_data)
+```
+
+Converting the target variable into a factor
+Deleting the 'ID_Code' column as it will not contribute in predicting the target variable
+```{r}
+Full_data$target <- as.factor(Full_data$target)
+Full_data$ID_code <- NULL
+
+Lesser_data$target <- as.factor(Lesser_data$target)
+Lesser_data$ID_code <- NULL
+```
+
+Removing rows with missing data
+```{r}
+sum(is.na(Full_data))
+Full_data = na.omit(Full_data)
+# 111 rows removed by na.omit
+
+sum(is.na(Lesser_data))
+Lesser_data = na.omit(Lesser_data)
+# 9 rows removed by na.omit
+```
+
+
+```{r}
+original_number <- nrow(Full_data)
+Full_data <- unique(Full_data)
+print(original_number - nrow(unique(Full_data)))
+
+original_number <- nrow(Lesser_data)
+Lesser_data <- unique(Lesser_data)
+print(original_number - nrow(unique(Lesser_data)))
+```
+
+Saving the cleaned dataset in a new file
+```{r}
+write.csv(Full_data, file = "Full_data_cleaned.csv")
+write.csv(Lesser_data, file = "Small_data_cleaned.csv")
+rm(Full_data)
+rm(Lesser_data)
+```
+
+## Modelling
+
+Loading packages required for modelling
+```{r}
+#install.packages('FSelector')
+#install.packages('CaTools')
+#install.packages('tidyverse')
+#install.packages('party')
+#install.packages('ROSE')
+#install.packages('caret')
+#install.packages('pROC')
+#install.packages('MASS')
+#install.packages('e1071')
+#install.packages('randomForest')
+#install.packages('CustomerScoringMetrics')
+
+library(FSelector) 
+library(caTools)
+library(tidyverse)
+library(party)
+library(ROSE)
+library(caret)
+library(pROC)
+library(MASS)
+library(e1071)
+library(randomForest)
+library(CustomerScoringMetrics)
+```
+
+Loading the cleaned datasets
+```{r}
+Full_data_cleaned <- read.csv("Full_data_cleaned.csv")
+Lesser_data_cleaned <- read.csv("Small_data_cleaned.csv")
+
+```
+
+Checking the structure of the data set and the data types of all variables
+``` {r}
+str(Full_data_cleaned)
+```
+
+Converting the target variables into factor and removing the X variable column as it does not help in predicting the target variable
+```{r}
+Full_data_cleaned$X <- NULL
+Full_data_cleaned$target <- as.factor(Full_data_cleaned$target)
+
+Lesser_data_cleaned$X <- NULL
+Lesser_data_cleaned$target <- as.factor(Lesser_data_cleaned$target)
+
+```
+
+Splitting the data set into training and test sets in a 70% and 30% split ratio.
+```{r}
+#Setting the seed value
+set.seed(43)
+
+#Splitting the full cleaned data set
+partition_1 <- sample.split(Full_data_cleaned,SplitRatio=0.70)
+full_training <- subset(Full_data_cleaned, partition_1 == TRUE)
+full_test <- subset(Full_data_cleaned, partition_1 == FALSE)
+
+#spliting the smaller cleaned data set
+partition_2 <- sample.split(Lesser_data_cleaned,SplitRatio =0.70)
+lesser_training <-subset(Lesser_data_cleaned, partition_2 == TRUE)
+lesser_test <-subset(Lesser_data_cleaned, partition_2 == FALSE)
+```
+
+Our aim is to successfully classify customers that are going to make a transaction while also considering the effect of misclassification. The column "target" shows whether a customer has made a transaction (1) or not (0).
+
+Thus, the problem at hand is a binary classification problem, where predictor variables are all integers.
+
+We try various models namely: Logistic Regression, Decision trees, Random forests and SVM. We tune the models to find the best one which gives the highest accuracy and F1 score.
+
+#Logistic Regression (LR) Model
+We use the 'glm()' function in order to build the logistic regression model. 
+Since our data set is imbalanced, we also run the function on sampled data('ovun.sample()' function used) in order to minimize the bias LR generally has towards the majority class.
+
+We try over,under and both sampling for values of p=0.1 to p=0.5 in the 'ovun,sample()' function. And also try various combinations of p values (class probability) in the 'ifelse()' function to find the best model.
+
+Further on comparing the confusion matrix of the train and test data, we can say that the model does not over fit, as the accuracy is similar in both cases.
+
+Below are the code for the LR models with the best results.
+```{r}
+#Model with Highest F1 Score
+under_sampled_data_1 <- ovun.sample(target~., data = full_training, method='under',p=0.25,seed=43)$data
+LR_model_1 <- glm(target~., data = under_sampled_data_1, family = 'binomial')
+LR_test_pred_1 <- predict(LR_model_1,full_test,type='response')
+LR_test_target_1 <- ifelse(LR_test_pred_1 > 0.45,'1','0')
+LR_test_target_1<- as.factor(LR_test_target_1)
+c1 <- confusionMatrix(LR_test_target_1,full_test$target, positive ='1',mode='prec_recall')
+c1
+
+#Model with Highest Accuracy
+over_sampled_data_1 <- ovun.sample(target~., data =full_training, method='over',p=0.1,seed=43)$data
+LR_model_2 <- glm(target~., data = over_sampled_data_1, family = 'binomial')
+LR_test_pred_2 <- predict(LR_model_2,full_test,type='response')
+LR_test_target_2 <- ifelse(LR_test_pred_2>0.5,'1','0')
+LR_test_target_2 <- as.factor(LR_test_target_2)
+c2 <- confusionMatrix(LR_test_target_2, full_test$target, positive ='1',mode='prec_recall')
+c2
+```
+
+
+#Decision Tree Model
+The decision tree model was run on unblanced, over, both and under sampled data, with varying values of p in the 'ovun.sample()' function.
+For each dataset, N(=1 to 100) variables were selected using the 'information.gain()' function. The value of N was selected such that it gave the best results.
+
+Further on comparing the confusion matrix of the train and test data, we can say that the model does not over fit, as the accuracy is similar in both cases.
+Below are the DT models which performed the best
+
+```{r}
+#Model with Highest F1 Score
+under_sampled_data_2 <- ovun.sample(target ~., data = full_training , method = "under", p=0.4, seed=43)$data
+attribute_weights <- information.gain(target ~ ., under_sampled_data_2)
+filter_attr_all <- filter(attribute_weights, attr_importance > 0)
+filter_attr_n <- cutoff.k(filter_attr_all, 67)
+Train_modifed <- under_sampled_data_2[filter_attr_n]
+Train_modifed$target <- as.factor(under_sampled_data_2$target)
+tree_spam_F1 <- ctree(target~ ., Train_modifed)
+tree_spam_prediction = predict(tree_spam_F1, full_test, type = "response")
+c3 <- confusionMatrix(tree_spam_prediction, full_test$target, positive='1', mode = "prec_recall")
+c3
+
+#Model with Highest Accuracy
+attribute_weights <- information.gain(target ~ ., full_training)
+filter_attr_all <- filter(attribute_weights, attr_importance > 0)
+filter_attr_n <- cutoff.k(filter_attr_all, 5)
+Train_modifed <- full_training[filter_attr_n]
+Train_modifed$target <- as.factor(full_training$target)
+tree_spam_acc <- ctree(target~ ., Train_modifed)
+tree_spam_prediction <- predict(tree_spam_acc, full_test, type = "response")
+c4 <- confusionMatrix(tree_spam_prediction, full_test$target, positive='1', mode = "prec_recall")
+c4
+
+```
+
+# Random Forest (RF) Model
+The 'randomForest()' function was used to build the random forest model.
+Model was run on unbalanced data first, then on under sampled, both sampled and over sampled data for p=0.2,0.3,0.4,0.5 to find the model which gave the highest accuracy anf F1 Score.
+Further on comparing the confusion matrix of the train and test data, we can say that the model does not over fit, as the accuracy is similar in both cases.
+Below are the RF models which gave the best results.
+```{r}
+#Model with Highest F1 Score
+under_sampled_data_3 <- ovun.sample(target~., data = full_training, method="under", p=0.5, seed = 43)$data
+RF_model_1 <- randomForest(target~., under_sampled_data_3)
+RF_pred_1 <- predict(RF_model_1, full_test)
+c5 <- confusionMatrix(RF_pred_1, full_test$target, mode = "prec_recall" , positive = '1')
+c5
+
+#Model with Highest Accuracy
+under_sampled_data_4 <-ovun.sample(target~., data = full_training, method="under", p=0.3, seed = 43)$data
+RF_model_2 <- randomForest(target~., under_sampled_data_4)
+RF_pred_2 <- predict(RF_model_2, full_test)
+c6 <- confusionMatrix(RF_pred_2, full_test$target, mode = "prec_recall" , positive = '1')
+c6
+```
+
+#SVM Model
+The SVM model was built using the 'svm()' function.
+Both the linear and radial kernel was run for different cost values. The model was then tuned to find the best results.
+Note: Model is run on the small data set due to the large computation time on the large data set.
+Evaluation metrics will not differ much between the two data sets and so it is safe to consider the evaluation metrics of the small data set as an estimate of the metrics for the bigger model.
+Further on comparing the confusion matrix of the train and test data, we can say that the model does not over fit, as the accuracy is similar in both cases.
+
+Below is the SVM model with the best results
+``` {r}
+svm_model <- svm(target ~. , data = lesser_training, kernel = "linear", scale = TRUE, probability = TRUE)
+svm_predict <- predict(svm_model, lesser_test)
+c7<-confusionMatrix(svm_predict, lesser_test$target, positive="1", mode = "prec_recall")
+c7
+
+```
+
+
+In order to visualise the performances of all the models, we use ROC and Gain charts.
+Since all the models have similar values for highest accuracy at around 90%, we do not compare the models with highest accuracy.
+The highest F1 Score differs between the models and hence we used they models to compare and find the best model.
+
+#ROC Curve for all the models
+We need to extract the probabilities predicted by the DT, RF and SVM models, the class probabilities of LR is already stored in LR_test_pred_2.
+We then use the 'roc()' function to generate input data for the ROC Curve after which we extract the Sensitivities and Specificities into a Data frame for plotting.
+```{r}
+#Logistic Regression Model
+ROC_LR <- roc(full_test$target, LR_test_pred_2)
+df_LR <- data.frame((1-ROC_LR$specificities), ROC_LR$sensitivities)  #Extract required data from ROC_LR
+  
+#Decision Tree Model
+DTpred <- t(as.data.frame(predict(tree_spam_F1,full_test,type="prob")))
+ROC_DT <- roc(full_test$target, DTpred[,2])
+df_DT <- data.frame((1-ROC_DT$specificities),(ROC_DT$sensitivities)) #Extract required data from ROC_DT
+
+#Random Forests
+RFpred <-predict(RF_model_1, full_test, type="prob")[,2]
+ROC_RF <- roc(full_test$target, RFpred)
+df_RF <- data.frame((1-ROC_RF$specificities), ROC_RF$sensitivities) #Extract required data from ROC_RF
+
+#SVM model
+SVMpred <- predict(svm_model, lesser_test, probability = TRUE)
+prob_SVM <- attr(SVMpred, "probabilities")[,2]
+ROC_SVM <- roc(lesser_test$target,prob_SVM)
+df_SVM <- data.frame((1-ROC_SVM$specificities), ROC_SVM$sensitivities) #Extract required data from ROC_SVM
+
+## Plotting the ROC Curve for all the models
+plot(df_LR, col="red", type="l",     
+xlab="False Positive Rate (1-Specificity)", ylab="True Positive Rate (Sensitivity)", main="ROC Curve")
+lines(df_DT, col="blue")               #adds ROC curve for DT
+lines(df_RF, col="green")              #adds ROC curve for RF
+lines(df_SVM, col="purple")              #adds ROC curve for SVM
+grid(NULL, lwd = 1)
+
+abline(a = 0, b = 1, col = "lightgray")    #adds a diagonal line
+
+legend("bottomright",
+c("Logistic Regression","Decision Trees", "Random Forest","SVM"),
+fill=c("red","blue", "green","purple"))
+
+```
+
+Computing the AUC values using auc() function
+```{r}
+# Logistic regression Model
+print("Logistic Regression")
+auc(ROC_LR)
+
+# Decision Tree Model
+print("Decision Trees")
+auc(ROC_DT)
+
+#Random Forests
+print("Random Forests")
+auc(ROC_RF)
+
+#SVM Model
+print("SVM")
+auc(ROC_SVM)
+
+```
+
+#Cumulative Response (Gain Chart)
+We will use `cumGainsTable()` function to calculate cumulative gain values. We plot the gain chart with increment of 1/100.
+```{r}
+#Logistic Regression
+GainTable_LR <- cumGainsTable(LR_test_target_2, full_test$target, resolution = 1/100)
+
+#Decision Trees
+GainTable_DT <- cumGainsTable(DTpred, full_test$target, resolution = 1/100)
+
+#Random Forests
+GainTable_RF <- cumGainsTable(RFpred, full_test$target, resolution = 1/100)
+
+#SVM
+GainTable_SVM <- cumGainsTable(prob_SVM, full_test$target, resolution = 1/100)
+
+#Plotting the gains chart
+plot(GainTable_LR[,4], col="red", type="l",    
+xlab="Percentage of test instances", ylab="Percentage of correct predictions", main="Cumulative Response(Gains Chart)")
+lines(GainTable_DT[,4], col="blue", type ="l")
+lines(GainTable_RF[,4], col="green", type ="l")
+lines(GainTable_SVM[,4], col="purple", type ="l")
+grid(NULL, lwd = 1)
+
+abline(a = 0, b = 1, col = "lightgray")
+
+legend("bottomright",
+c("Logistic Regression","Decision Trees", "Random Forest","SVM"),
+fill=c("red","blue", "green","purple"))
+
+```
